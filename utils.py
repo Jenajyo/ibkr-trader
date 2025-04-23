@@ -37,10 +37,22 @@ def cancel_all_open_orders():
     except Exception as e:
         logger.error(f"Error cancelling all open orders: {e}")
 
-# Get the latest market close price for a ticker using yfinance
+# Get the latest market price using IBKR, fallback to Yahoo Finance if needed
 def get_market_price(ticker):
-    stock_info = yf.Ticker(ticker)
-    return stock_info.history(period="1d")['Close'].iloc[-1]
+    try:
+        contract = Stock(ticker, "SMART", "USD")
+        ib.qualifyContracts(contract)
+        market_data = ib.reqMktData(contract, snapshot=True)
+        ib.sleep(1)
+        price = market_data.last if market_data.last else (market_data.close or market_data.ask or market_data.bid)
+        if price and price > 0:
+            # logger.info(f"IBKR price for {ticker}: ${price:.2f}")
+            return price
+        raise ValueError("No valid IBKR price")
+    except Exception as e:
+        logger.warning(f"IBKR price fetch failed for {ticker}, falling back to Yahoo Finance: {e}")
+        stock_info = yf.Ticker(ticker)
+        return stock_info.history(period="1d")["Close"].iloc[-1]
 
 # Return a qualified IB contract for the given ticker
 def qualify_contract(ticker):
@@ -57,12 +69,10 @@ def place_market_order(contract, action, quantity):
     ib.sleep(1)
     return trade
 
-
 # Place a limit order through IB at market price + $0.50
 def place_limit_order(contract, action, quantity, market_price):
-    order = Order(
+    order = LimitOrder(
         action=action,
-        orderType="LMT",
         totalQuantity=quantity,
         lmtPrice=round(market_price + 0.50, 2),
         tif="GTC",
@@ -71,7 +81,6 @@ def place_limit_order(contract, action, quantity, market_price):
     trade = ib.placeOrder(contract, order)
     ib.sleep(1)
     return trade
-
 
 # Attach a trailing limit order with given offset and percent to a contract
 def attach_trailing_limit(contract, action, quantity, market_price, trail_limit_percent):
@@ -82,10 +91,10 @@ def attach_trailing_limit(contract, action, quantity, market_price, trail_limit_
         else market_price * (1 + trail_limit_percent / 100),
         2,
     )
-    trailing_order = LimitOrder(
+    trailing_order = Order(
         action=reverse_action,
-        totalQuantity=quantity,
         orderType="TRAIL LIMIT",
+        totalQuantity=quantity,
         trailingPercent=trail_limit_percent,
         trailStopPrice=trail_stop_price,
         lmtPriceOffset=0.10,

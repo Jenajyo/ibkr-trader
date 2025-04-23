@@ -4,16 +4,14 @@ import math
 from utils import (
     ib, excel_file, get_market_price, qualify_contract, place_market_order,
     attach_trailing_limit, cancel_existing_orders, get_remaining_quantity,
-    update_sheet_in_excel, append_to_log ,place_limit_order,cancel_all_open_orders
+    update_sheet_in_excel, append_to_log, place_limit_order, cancel_all_open_orders
 )
 
-#Set this flag as False , only set it as true if you want to cancel all orders
+# Set this flag to True if you want to cancel all open orders before running
 CANCEL_ALL_FIRST = False
 
-# Suppress ib_insync internal logs
+# Logging setup
 logging.getLogger('ib_insync').setLevel(logging.WARNING)
-
-# Configure logging for your own outputs
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -34,7 +32,7 @@ def handle_market_orders(index, df, ticker, amount, quantity, action, order_type
                 df.at[index, "Status"] = "MKT Order Placed"
             df.at[index, "Execution"] = " "
             append_to_log(ticker, action, quantity, market_price)
-            logger.info(f"[{order_type}] {action} order executed for {quantity} shares of {ticker} at ${market_price:.2f}")
+            logger.info(f"[{order_type}] {action} {quantity} shares of {ticker} at ${market_price:.2f}")
     except Exception as e:
         logger.error(f"Error processing market order for {ticker}: {e}")
 
@@ -47,11 +45,11 @@ def handle_remove_limit_order(index, df, ticker, cancelled_tickers):
             final_count = len([t for t in ib.trades() if t.orderStatus.status != "Cancelled"])
             cancelled_tickers.add(ticker)
             if initial_count > final_count:
-                logger.info(f"[REMOVE-LIMIT] {ticker}: Limit order(s) successfully cancelled.")
                 df.at[index, "Status"] = "Limit Order Cancelled"
                 df.at[index, "Execution"] = " "
+                logger.info(f"[REMOVE-LIMIT] {ticker}: Limit order(s) cancelled.")
             else:
-                logger.info(f"[REMOVE-LIMIT] {ticker}: No active limit orders found to cancel.")
+                logger.info(f"[REMOVE-LIMIT] {ticker}: No active limit orders found.")
     except Exception as e:
         logger.error(f"Error cancelling orders for {ticker}: {e}")
 
@@ -70,7 +68,6 @@ def handle_attach_limit(index, df, ticker, quantity, action, trail_limit_percent
     except Exception as e:
         logger.error(f"Error attaching trailing limit for {ticker}: {e}")
 
-
 def handle_lmt_attach_trail_limit(index, df, ticker, amount, quantity, action, trail_limit_percent):
     try:
         contract = qualify_contract(ticker)
@@ -82,7 +79,6 @@ def handle_lmt_attach_trail_limit(index, df, ticker, amount, quantity, action, t
         quantity = math.ceil(amount / limit_price) if quantity is None else quantity
 
         trade = place_limit_order(contract, action, quantity, market_price)
-
         if trade.orderStatus.status in ["Filled", "Submitted"]:
             df.at[index, "Quantity"] = quantity
             df.at[index, "Amount"] = math.ceil(quantity * limit_price)
@@ -91,10 +87,9 @@ def handle_lmt_attach_trail_limit(index, df, ticker, amount, quantity, action, t
                 df.at[index, "Status"] = "LMT with Trailing Limit Attached"
                 df.at[index, "Execution"] = " "
                 append_to_log(ticker, action, quantity, limit_price)
-                logger.info(f"[LMT-ATTCH-TRAIL-LIMIT] {action} order placed for {quantity} shares of {ticker} at ${limit_price:.2f} with trailing limit")
+                logger.info(f"[LMT-ATTCH-TRAIL-LIMIT] {action} {quantity} shares of {ticker} at ${limit_price:.2f} with trailing limit")
         else:
             logger.warning(f"[LMT-ATTCH-TRAIL-LIMIT] {ticker}: Limit order not submitted (status: {trade.orderStatus.status})")
-
     except Exception as e:
         logger.error(f"Error in LMT-ATTCH-TRAIL-LIMIT for {ticker}: {e}")
 
@@ -119,13 +114,11 @@ def handle_close(index, df, ticker, quantity, action):
 
 def process_sheet(sheet_name, df):
     cancelled_tickers = set()
-    
     for index, row in df.iterrows():
         try:
             execution = str(row.get("Execution", "")).strip().upper()
             if execution != "TRANSMIT":
                 continue
-
             ticker = row["Ticker"]
             amount = row["Amount"]
             order_type = str(row.get("OrderType", "")).strip().upper()
@@ -133,7 +126,6 @@ def process_sheet(sheet_name, df):
             quantity = row.get("Quantity", None)
             quantity = int(quantity) if not pd.isna(quantity) else None
             action = "BUY" if sheet_name.startswith("BUY") else "SELL"
-
             match order_type:
                 case "LMT-ATTCH-TRAIL-LIMIT":
                     handle_lmt_attach_trail_limit(index, df, ticker, amount, quantity, action, trail_limit_percent)
@@ -148,9 +140,7 @@ def process_sheet(sheet_name, df):
                     handle_close(index, df, ticker, quantity, action)
         except Exception as e:
             logger.error(f"Unexpected error in row {index} of sheet {sheet_name}: {e}")
-
     update_sheet_in_excel(sheet_name, df)
-
 
 def run():
     try:
