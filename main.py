@@ -4,14 +4,14 @@ import math
 from utils import (
     ib, excel_file, get_market_price, qualify_contract, place_market_order,
     attach_trailing_limit, cancel_existing_orders, get_remaining_quantity,
-    update_sheet_in_excel, append_to_log, place_limit_order, cancel_all_open_orders, add_trailing_limit_to_holdings
+    update_sheet_in_excel, append_to_log, place_limit_order, cancel_all_open_orders, add_trailing_limit_to_holdings, update_orders_page
 )
 
 # Set this flag to True if you want to cancel all open orders before running
 CANCEL_ALL_FIRST = False
 
 # Set this flag to True if you want to attach limit trail orders all open orders before running
-APPLY_TRAIL_TO_HOLDINGS = True
+APPLY_TRAIL_TO_HOLDINGS = False
 
 # Logging setup
 logging.getLogger('ib_insync').setLevel(logging.WARNING)
@@ -149,7 +149,10 @@ def process_sheet(sheet_name, df):
 CANCEL_ALL_FIRST = False
 
 # Set this flag to True if you want to attach limit trail orders all open orders before running
-APPLY_TRAIL_TO_HOLDINGS = True
+APPLY_TRAIL_TO_HOLDINGS = False
+
+# Set this flag to True if you want to attach limit trail orders all open orders before running
+RUN_ORDER_PAGE_UPDATE = True
 
 def run():
     try:
@@ -163,6 +166,11 @@ def run():
             logger.info("Trailing limit orders applied to all holdings.")
             return
 
+        if RUN_ORDER_PAGE_UPDATE:
+            update_orders_page()
+            logger.info("Updated Orders with holdings with Buy_Usual and SELL sheet.")
+            return
+        
         sheets = pd.read_excel(excel_file, sheet_name=None)
         for sheet_name, sheet_data in sheets.items():
             if sheet_name.startswith("BUY") or sheet_name.startswith("SELL"):

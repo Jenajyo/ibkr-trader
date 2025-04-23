@@ -176,3 +176,46 @@ def append_to_log(symbol, action, quantity, price):
 
     with pd.ExcelWriter(excel_file, engine="openpyxl", mode="a", if_sheet_exists="overlay") as writer:
         updated_log.to_excel(writer, sheet_name="Log", index=False)
+
+# Update BUY_USUAL and SELL sheets based on holdings
+def update_orders_page():
+    holdings = {pos.contract.symbol: pos.position for pos in ib.portfolio() if pos.contract.secType == "STK"}
+    sheets = pd.read_excel(excel_file, sheet_name=None)
+
+    def sync_sheet(sheet_name, action):
+        df = sheets.get(sheet_name, pd.DataFrame())
+        if df.empty:
+            df = pd.DataFrame(columns=["Ticker", "Amount", "Quantity", "TrailLimit%", "OrderType", "Status", "Execution"])
+
+        tickers_in_sheet = set(df["Ticker"].astype(str).str.upper())
+        for symbol, qty in holdings.items():
+            if action == "BUY" and qty <= 0:
+                continue
+            if action == "SELL" and qty > 0:
+                continue
+            price = get_market_price(symbol)
+            update_data = {
+                "Amount": math.ceil(qty * price),
+                "Quantity": qty,
+                "TrailLimit%": 2.5,
+                "Status": "Open",
+                "Execution": " ",
+                "OrderType": "MKT-ATCH-LIMIT"
+            }
+            if symbol in tickers_in_sheet:
+                for col, val in update_data.items():
+                    df.loc[df["Ticker"].str.upper() == symbol, col] = val
+            else:
+                new_row = {"Ticker": symbol, **update_data}
+                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+
+        for symbol in tickers_in_sheet - holdings.keys():
+            for col, val in zip(["Amount", "Quantity", "TrailLimit%", "OrderType", "Status", "Execution"], [2000, " ", 2.5, "MKT-ATCH-LIMIT", "", ""]):
+                df.loc[df["Ticker"].str.upper() == symbol, col] = val
+
+        update_sheet_in_excel(sheet_name, df)
+
+    sync_sheet("BUY_Usual", "BUY")
+    sync_sheet("SELL", "SELL")
+
+
