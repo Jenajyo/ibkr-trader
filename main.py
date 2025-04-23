@@ -159,7 +159,7 @@ def run():
             return
         
         if APPLY_TRAIL_TO_HOLDINGS:
-            add_trailing_limit_to_holdings(trail_limit_percent=2.5, side="SELL")
+            add_trailing_limit_to_holdings(trail_limit_percent=2.5, side="SELL" , tickers=["IAU"])
             logger.info("Trailing limit orders applied to all holdings.")
             return
 

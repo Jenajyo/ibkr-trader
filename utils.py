@@ -122,11 +122,13 @@ def get_remaining_quantity(ticker):
             return pos.position
     return 0
 
-# Add a trailing limit stop loss to all currently held positions
-def add_trailing_limit_to_holdings(trail_limit_percent=2.5, side="SELL"):
+# Add a trailing limit stop loss to specified stocks or all held positions
+def add_trailing_limit_to_holdings(trail_limit_percent=2.5, side="SELL", tickers=[]):
     for pos in ib.portfolio():
         if pos.contract.secType == "STK" and pos.position > 0:
             symbol = pos.contract.symbol
+            if tickers and symbol not in tickers:
+                continue
             logger.info(f"[TRAIL-ATTACH] {symbol}: Replacing existing limit/trailing orders.")
             cancel_existing_orders(symbol)
             price = get_market_price(symbol)
@@ -141,7 +143,7 @@ def add_trailing_limit_to_holdings(trail_limit_percent=2.5, side="SELL"):
             trailing_order = Order(
                 action=action,
                 orderType="TRAIL LIMIT",
-                totalQuantity=int(pos.position),  # ✅ Ensures no fractional shares
+                totalQuantity=int(pos.position),
                 trailingPercent=trail_limit_percent,
                 trailStopPrice=trail_stop_price,
                 lmtPriceOffset=0.10,
