@@ -145,6 +145,12 @@ def process_sheet(sheet_name, df):
             logger.error(f"Unexpected error in row {index} of sheet {sheet_name}: {e}")
     update_sheet_in_excel(sheet_name, df)
 
+# Set this flag to True if you want to cancel all open orders before running
+CANCEL_ALL_FIRST = False
+
+# Set this flag to True if you want to attach limit trail orders all open orders before running
+APPLY_TRAIL_TO_HOLDINGS = True
+
 def run():
     try:
         if CANCEL_ALL_FIRST:
@@ -153,7 +159,7 @@ def run():
             return
         
         if APPLY_TRAIL_TO_HOLDINGS:
-            add_trailing_limit_to_holdings()
+            add_trailing_limit_to_holdings(trail_limit_percent=2.5, side="SELL")
             logger.info("Trailing limit orders applied to all holdings.")
             return
 

@@ -123,15 +123,34 @@ def get_remaining_quantity(ticker):
     return 0
 
 # Add a trailing limit stop loss to all currently held positions
-def add_trailing_limit_to_holdings(trail_limit_percent=2.5):
+def add_trailing_limit_to_holdings(trail_limit_percent=2.5, side="SELL"):
     for pos in ib.portfolio():
         if pos.contract.secType == "STK" and pos.position > 0:
             symbol = pos.contract.symbol
             logger.info(f"[TRAIL-ATTACH] {symbol}: Replacing existing limit/trailing orders.")
             cancel_existing_orders(symbol)
             price = get_market_price(symbol)
-            attach_trailing_limit(pos.contract, "SELL", pos.position, price, trail_limit_percent)
-            logger.info(f"[TRAIL-ATTACH] {symbol}: Trailing limit placed at {trail_limit_percent}% for {pos.position} shares.")
+            contract = qualify_contract(symbol)
+            action = side.upper()
+            trail_stop_price = round(
+                price * (1 - trail_limit_percent / 100)
+                if action == "SELL"
+                else price * (1 + trail_limit_percent / 100),
+                2
+            )
+            trailing_order = Order(
+                action=action,
+                orderType="TRAIL LIMIT",
+                totalQuantity=int(pos.position),  # ✅ Ensures no fractional shares
+                trailingPercent=trail_limit_percent,
+                trailStopPrice=trail_stop_price,
+                lmtPriceOffset=0.10,
+                tif="GTC",
+                outsideRth=True
+            )
+            trade = ib.placeOrder(contract, trailing_order)
+            ib.sleep(1)
+            logger.info(f"[TRAIL-ATTACH] {symbol}: Trailing limit placed at {trail_limit_percent}% for {int(pos.position)} shares.")
 
 # Update the given sheet in the Excel file with the latest DataFrame content
 def update_sheet_in_excel(sheet_name, df):
