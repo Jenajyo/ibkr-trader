@@ -46,7 +46,6 @@ def get_market_price(ticker):
         ib.sleep(1)
         price = market_data.last if market_data.last else (market_data.close or market_data.ask or market_data.bid)
         if price and price > 0:
-            # logger.info(f"IBKR price for {ticker}: ${price:.2f}")
             return price
         raise ValueError("No valid IBKR price")
     except Exception as e:
@@ -123,6 +122,17 @@ def get_remaining_quantity(ticker):
             return pos.position
     return 0
 
+# Add a trailing limit stop loss to all currently held positions
+def add_trailing_limit_to_holdings(trail_limit_percent=2.5):
+    for pos in ib.portfolio():
+        if pos.contract.secType == "STK" and pos.position > 0:
+            symbol = pos.contract.symbol
+            logger.info(f"[TRAIL-ATTACH] {symbol}: Replacing existing limit/trailing orders.")
+            cancel_existing_orders(symbol)
+            price = get_market_price(symbol)
+            attach_trailing_limit(pos.contract, "SELL", pos.position, price, trail_limit_percent)
+            logger.info(f"[TRAIL-ATTACH] {symbol}: Trailing limit placed at {trail_limit_percent}% for {pos.position} shares.")
+
 # Update the given sheet in the Excel file with the latest DataFrame content
 def update_sheet_in_excel(sheet_name, df):
     with pd.ExcelWriter(excel_file, engine='openpyxl', mode='a', if_sheet_exists='overlay') as writer:
@@ -145,19 +155,3 @@ def append_to_log(symbol, action, quantity, price):
 
     with pd.ExcelWriter(excel_file, engine="openpyxl", mode="a", if_sheet_exists="overlay") as writer:
         updated_log.to_excel(writer, sheet_name="Log", index=False)
-
-def cancel_all_open_orders():
-    try:
-        ib.reqGlobalCancel()
-        ib.sleep(2)
-        ib.reqOpenOrders()
-        ib.sleep(2)
-        ib.waitOnUpdate(timeout=10)
-        open_orders = ib.openOrders()  # ✅ includes all open orders
-        for order in open_orders:
-            if order.orderId != 0:
-                ib.cancelOrder(order)
-                logger.info(f"Cancelled open order ID {order.orderId}")
-        logger.info("All open orders cancelled.")
-    except Exception as e:
-        logger.error(f"Error cancelling all open orders: {e}")

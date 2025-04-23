@@ -4,11 +4,14 @@ import math
 from utils import (
     ib, excel_file, get_market_price, qualify_contract, place_market_order,
     attach_trailing_limit, cancel_existing_orders, get_remaining_quantity,
-    update_sheet_in_excel, append_to_log, place_limit_order, cancel_all_open_orders
+    update_sheet_in_excel, append_to_log, place_limit_order, cancel_all_open_orders, add_trailing_limit_to_holdings
 )
 
 # Set this flag to True if you want to cancel all open orders before running
 CANCEL_ALL_FIRST = False
+
+# Set this flag to True if you want to attach limit trail orders all open orders before running
+APPLY_TRAIL_TO_HOLDINGS = True
 
 # Logging setup
 logging.getLogger('ib_insync').setLevel(logging.WARNING)
@@ -148,6 +151,12 @@ def run():
             cancel_all_open_orders()
             logger.info("Order cancellation requested. Retrying order execution after cleanup.")
             return
+        
+        if APPLY_TRAIL_TO_HOLDINGS:
+            add_trailing_limit_to_holdings()
+            logger.info("Trailing limit orders applied to all holdings.")
+            return
+
         sheets = pd.read_excel(excel_file, sheet_name=None)
         for sheet_name, sheet_data in sheets.items():
             if sheet_name.startswith("BUY") or sheet_name.startswith("SELL"):

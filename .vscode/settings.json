@@ -1,0 +1,35 @@
+{
+    "workbench.colorTheme": "Default Light+",
+    "editor.tokenColorCustomizations": {
+      "textMateRules": [
+        {
+          "scope": "keyword.control",
+          "settings": { "foreground": "#FF00FF" }  // try, except, return
+        },
+        {
+          "scope": "keyword.declaration",
+          "settings": { "foreground": "#f18305" }  // def, class
+        },
+        {
+          "scope": "entity.name.function",
+          "settings": { "foreground": "#A0522D" }  // function names
+        },
+        {
+          "scope": "variable",
+          "settings": { "foreground": "#210af1" }  // variables
+        },
+        {
+          "scope": "comment",
+          "settings": { "foreground": "#4CAF50", "fontStyle": "italic" }  // comments
+        }
+      ]
+    },
+    "editor.fontFamily": "Fira Code, Consolas, 'Courier New', monospace",
+    "editor.fontSize": 14,
+    "editor.lineHeight": 22,
+    "editor.fontLigatures": true,
+    "workbench.colorCustomizations": {
+      "editor.background": "#f5f5f5"
+    }
+  }
+  
