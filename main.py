@@ -1,12 +1,14 @@
 import logging
-CANCEL_ALL_FIRST = False
 import pandas as pd
 import math
 from utils import (
     ib, excel_file, get_market_price, qualify_contract, place_market_order,
     attach_trailing_limit, cancel_existing_orders, get_remaining_quantity,
-    update_sheet_in_excel, append_to_log ,place_limit_order
+    update_sheet_in_excel, append_to_log ,place_limit_order,cancel_all_open_orders
 )
+
+#Set this flag as False , only set it as true if you want to cancel all orders
+CANCEL_ALL_FIRST = False
 
 # Suppress ib_insync internal logs
 logging.getLogger('ib_insync').setLevel(logging.WARNING)
@@ -149,21 +151,6 @@ def process_sheet(sheet_name, df):
 
     update_sheet_in_excel(sheet_name, df)
 
-def cancel_all_open_orders():
-    try:
-        ib.reqGlobalCancel()
-        ib.sleep(2)
-        ib.reqOpenOrders()
-        ib.sleep(2)
-        ib.waitOnUpdate(timeout=10)
-        open_orders = ib.openOrders()  # ✅ includes all open orders
-        for order in open_orders:
-            if order.orderId != 0:
-                ib.cancelOrder(order)
-                logger.info(f"Cancelled open order ID {order.orderId}")
-        logger.info("All open orders cancelled.")
-    except Exception as e:
-        logger.error(f"Error cancelling all open orders: {e}")
 
 def run():
     try:

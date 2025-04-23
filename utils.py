@@ -136,3 +136,19 @@ def append_to_log(symbol, action, quantity, price):
 
     with pd.ExcelWriter(excel_file, engine="openpyxl", mode="a", if_sheet_exists="overlay") as writer:
         updated_log.to_excel(writer, sheet_name="Log", index=False)
+
+def cancel_all_open_orders():
+    try:
+        ib.reqGlobalCancel()
+        ib.sleep(2)
+        ib.reqOpenOrders()
+        ib.sleep(2)
+        ib.waitOnUpdate(timeout=10)
+        open_orders = ib.openOrders()  # ✅ includes all open orders
+        for order in open_orders:
+            if order.orderId != 0:
+                ib.cancelOrder(order)
+                logger.info(f"Cancelled open order ID {order.orderId}")
+        logger.info("All open orders cancelled.")
+    except Exception as e:
+        logger.error(f"Error cancelling all open orders: {e}")
