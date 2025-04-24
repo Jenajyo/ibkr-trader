@@ -15,16 +15,24 @@ logger = logging.getLogger(__name__)
 
 # Initialize IB connection with dynamic mode
 ib = IB()
+excel_file = None
+Trading_Mode = "Paper"
 
 # Function to set real or paper trading connection
-def init_ibkr_connection(paper_trading=True):
+def init_ibkr_connection(Trading_Mode):
     global ib, excel_file
-    if paper_trading:
-        ib.connect("127.0.0.1", 7496, clientId=1)
-        excel_file = "c:/Users/jyoti/Downloads/IBKR_TRADER/Orders_PaperTrading.xlsx"
-    else:
+    if Trading_Mode == "Paper":
         ib.connect("127.0.0.1", 7497, clientId=1)
+        excel_file = "c:/Users/jyoti/Downloads/IBKR_TRADER/PaperTrading/Orders_PaperTrading.xlsx"
+    elif Trading_Mode == "Live":
+        ib.connect("127.0.0.1", 7496, clientId=1)
         excel_file = "c:/Users/jyoti/Downloads/IBKR_TRADER/Orders.xlsx"
+    else:
+        logger.error("Improper Trading Mode")
+
+# Getter for excel_file path
+def get_excel_file():
+    return excel_file
 
 # Cancel all open orders
 def cancel_all_open_orders():
@@ -61,7 +69,14 @@ def get_market_price(ticker):
 
 # Return a qualified IB contract for the given ticker
 def qualify_contract(ticker):
-    contract = Stock(ticker, "SMART", "USD")
+    # Handle IBKR-specific symbols like BRK.B or BF.B
+    if "." in ticker:
+        contract = Stock(ticker.replace(".", " "), "SMART", "USD")
+        contract.symbol = ticker
+        contract.localSymbol = ticker
+    else:
+        contract = Stock(ticker, "SMART", "USD")
+
     ib.qualifyContracts(contract)
     return contract
 
@@ -184,7 +199,7 @@ def append_to_log(symbol, action, quantity, price):
         updated_log.to_excel(writer, sheet_name="Log", index=False)
 
 # Update BUY_USUAL and SELL sheets based on holdings
-def update_orders_page():
+def update_orders_page(Trading_Mode):
     holdings = {pos.contract.symbol: pos.position for pos in ib.portfolio() if pos.contract.secType == "STK"}
     sheets = pd.read_excel(excel_file, sheet_name=None)
 
@@ -218,10 +233,13 @@ def update_orders_page():
                 new_row = {"Ticker": symbol, **update_data}
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
-        for symbol in tickers_in_sheet:
-            if symbol not in updated_tickers:
-                for col, val in zip(["Amount", "Quantity", "TrailLimit%", "OrderType", "Status", "Execution"], [2000, " ", 2.5, "MKT-ATCH-LIMIT", "", ""]):
-                    df.loc[df["Ticker"].str.upper() == symbol, col] = val
+        if Trading_Mode == "Paper":
+            df = df[~df["Ticker"].str.upper().isin(tickers_in_sheet - updated_tickers)]
+        else:
+            for symbol in tickers_in_sheet:
+                if symbol not in updated_tickers:
+                    for col, val in zip(["Amount", "Quantity", "TrailLimit%", "OrderType", "Status", "Execution"], [2000, " ", 2.5, "MKT-ATCH-LIMIT", "", ""]):
+                        df.loc[df["Ticker"].str.upper() == symbol, col] = val
 
         update_sheet_in_excel(sheet_name, df)
 
