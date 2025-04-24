@@ -10,7 +10,7 @@ from utils import (
 )
 
 # Configuration Flags
-Trading_Mode = "Paper"
+Trading_Mode = "Live"
 CANCEL_ALL_FIRST = False
 APPLY_TRAIL_TO_HOLDINGS = False
 RUN_ORDER_PAGE_UPDATE = False
@@ -84,7 +84,7 @@ def handle_lmt_attach_trail_limit(index, df, ticker, amount, quantity, action, t
     try:
         contract = qualify_contract(ticker)
         market_price = get_market_price(ticker)
-        limit_price = round(market_price + 0.50, 2)
+        limit_price = round(market_price + 0.10, 2)
 
         logger.info(f"{ticker} Market Price = {market_price}, Limit Price = {limit_price}")
 
