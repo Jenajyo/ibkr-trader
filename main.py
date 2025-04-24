@@ -4,19 +4,23 @@ import math
 from utils import (
     ib, excel_file, get_market_price, qualify_contract, place_market_order,
     attach_trailing_limit, cancel_existing_orders, get_remaining_quantity,
-    update_sheet_in_excel, append_to_log, place_limit_order, cancel_all_open_orders, add_trailing_limit_to_holdings, update_orders_page
+    update_sheet_in_excel, append_to_log, place_limit_order, cancel_all_open_orders, add_trailing_limit_to_holdings, update_orders_page, init_ibkr_connection
 )
 
-# Set this flag to True if you want to cancel all open orders before running
+# Configuration Flags
+global real_trading
+real_trading = False
 CANCEL_ALL_FIRST = False
-
-# Set this flag to True if you want to attach limit trail orders all open orders before running
 APPLY_TRAIL_TO_HOLDINGS = False
+RUN_ORDER_PAGE_UPDATE = False
 
 # Logging setup
 logging.getLogger('ib_insync').setLevel(logging.WARNING)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Initialize IBKR connection
+init_ibkr_connection(real_trading)
 
 def handle_market_orders(index, df, ticker, amount, quantity, action, order_type, trail_limit_percent):
     try:
@@ -152,17 +156,18 @@ CANCEL_ALL_FIRST = False
 APPLY_TRAIL_TO_HOLDINGS = False
 
 # Set this flag to True if you want to attach limit trail orders all open orders before running
-RUN_ORDER_PAGE_UPDATE = True
+RUN_ORDER_PAGE_UPDATE = False
 
+# Run logic
 def run():
     try:
         if CANCEL_ALL_FIRST:
             cancel_all_open_orders()
             logger.info("Order cancellation requested. Retrying order execution after cleanup.")
             return
-        
+
         if APPLY_TRAIL_TO_HOLDINGS:
-            add_trailing_limit_to_holdings(trail_limit_percent=2.5, side="SELL" , tickers=["IAU"])
+            add_trailing_limit_to_holdings(trail_limit_percent=2.5, side="SELL", tickers=["IAU"])
             logger.info("Trailing limit orders applied to all holdings.")
             return
 
@@ -170,7 +175,7 @@ def run():
             update_orders_page()
             logger.info("Updated Orders with holdings with Buy_Usual and SELL sheet.")
             return
-        
+
         sheets = pd.read_excel(excel_file, sheet_name=None)
         for sheet_name, sheet_data in sheets.items():
             if sheet_name.startswith("BUY") or sheet_name.startswith("SELL"):
@@ -181,3 +186,4 @@ def run():
 
 if __name__ == "__main__":
     run()
+

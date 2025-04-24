@@ -13,12 +13,18 @@ logging.getLogger('ib_insync').setLevel(logging.WARNING)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Initialize IB connection
+# Initialize IB connection with dynamic mode
 ib = IB()
-ib.connect("127.0.0.1", 7497, clientId=1)
 
-# Path to the Excel workbook
-excel_file = "c:/Users/jyoti/Downloads/IBKR_TRADER/Orders.xlsx"
+# Function to set real or paper trading connection
+def init_ibkr_connection(paper_trading=True):
+    global ib, excel_file
+    if paper_trading:
+        ib.connect("127.0.0.1", 7496, clientId=1)
+        excel_file = "c:/Users/jyoti/Downloads/IBKR_TRADER/Orders_PaperTrading.xlsx"
+    else:
+        ib.connect("127.0.0.1", 7497, clientId=1)
+        excel_file = "c:/Users/jyoti/Downloads/IBKR_TRADER/Orders.xlsx"
 
 # Cancel all open orders
 def cancel_all_open_orders():
@@ -188,6 +194,8 @@ def update_orders_page():
             df = pd.DataFrame(columns=["Ticker", "Amount", "Quantity", "TrailLimit%", "OrderType", "Status", "Execution"])
 
         tickers_in_sheet = set(df["Ticker"].astype(str).str.upper())
+        updated_tickers = set()
+
         for symbol, qty in holdings.items():
             if action == "BUY" and qty <= 0:
                 continue
@@ -202,6 +210,7 @@ def update_orders_page():
                 "Execution": " ",
                 "OrderType": "MKT-ATCH-LIMIT"
             }
+            updated_tickers.add(symbol)
             if symbol in tickers_in_sheet:
                 for col, val in update_data.items():
                     df.loc[df["Ticker"].str.upper() == symbol, col] = val
@@ -209,13 +218,12 @@ def update_orders_page():
                 new_row = {"Ticker": symbol, **update_data}
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
-        for symbol in tickers_in_sheet - holdings.keys():
-            for col, val in zip(["Amount", "Quantity", "TrailLimit%", "OrderType", "Status", "Execution"], [2000, " ", 2.5, "MKT-ATCH-LIMIT", "", ""]):
-                df.loc[df["Ticker"].str.upper() == symbol, col] = val
+        for symbol in tickers_in_sheet:
+            if symbol not in updated_tickers:
+                for col, val in zip(["Amount", "Quantity", "TrailLimit%", "OrderType", "Status", "Execution"], [2000, " ", 2.5, "MKT-ATCH-LIMIT", "", ""]):
+                    df.loc[df["Ticker"].str.upper() == symbol, col] = val
 
         update_sheet_in_excel(sheet_name, df)
 
     sync_sheet("BUY_Usual", "BUY")
     sync_sheet("SELL", "SELL")
-
-
