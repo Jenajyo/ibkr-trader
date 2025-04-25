@@ -1,6 +1,8 @@
 import logging
 import pandas as pd
 import math
+import ast
+import os
 from utils import (
     ib, get_market_price, qualify_contract, place_market_order,
     attach_trailing_limit, cancel_existing_orders, get_remaining_quantity,
@@ -10,7 +12,7 @@ from utils import (
 )
 
 # Configuration Flags
-Trading_Mode = "Live"
+Trading_Mode = "Paper"
 CANCEL_ALL_FIRST = False
 APPLY_TRAIL_TO_HOLDINGS = False
 RUN_ORDER_PAGE_UPDATE = False
@@ -25,7 +27,6 @@ init_ibkr_connection(Trading_Mode)
 
 # Excel file path is determined by init_ibkr_connection
 from utils import excel_file
-
 
 def handle_market_orders(index, df, ticker, amount, quantity, action, order_type, trail_limit_percent):
     try:
@@ -154,6 +155,75 @@ def process_sheet(sheet_name, df):
             logger.error(f"Unexpected error in row {index} of sheet {sheet_name}: {e}")
     update_sheet_in_excel(sheet_name, df)
 
+def process_inline_trades(trade_file_path="Trade_File.txt"):
+    if not os.path.exists(trade_file_path):
+        logger.warning(f"⚠️ Trade file {trade_file_path} does not exist.")
+        return
+
+    with open(trade_file_path, "r") as file:
+        content = file.read()
+
+    try:
+        trade_config = ast.literal_eval(content)
+    except Exception as e:
+        logger.error(f"Error parsing trade file: {e}")
+        return
+
+    for mode in ["BUY", "SELL"]:
+        trades = trade_config.get(mode, [])
+        if not trades:
+            continue
+
+        action = mode  # "BUY" or "SELL"
+
+        for item in trades:
+            if len(item) < 4:
+                continue
+            try:
+                symbol = item[0].upper()
+                amount = int(item[1])
+                trail_limit = float(item[2])
+                order_type = item[3].upper()
+
+                contract = qualify_contract(symbol)
+                market_price = get_market_price(symbol)
+
+                quantity = math.ceil(amount / market_price)
+
+                logger.info(f"Processing {action} {symbol} - Amount ${amount}, Qty {quantity}, OrderType {order_type}")
+
+                if order_type == "MKT-ATCH-LIMIT":
+                    # Place MKT order first
+                    trade = place_market_order(contract, action, quantity)
+                    ib.sleep(1)
+                    if trade.orderStatus.status in ["Submitted", "Filled"]:
+                        # Then attach a trailing limit
+                        attach_trailing_limit(contract, action, quantity, market_price, trail_limit)
+                        logger.info(f"{symbol}: Market order placed and trailing limit attached ({trail_limit}%)")
+                elif order_type == "MKT":
+                    # Simple market order
+                    trade = place_market_order(contract, action, quantity)
+                    logger.info(f"{symbol}: Market order placed.")
+                elif order_type == "LMT-ATTCH-TRAIL-LIMIT":
+                    # Place LMT and attach trailing
+                    trade = place_limit_order(contract, action, quantity, market_price)
+                    ib.sleep(1)
+                    if trade.orderStatus.status in ["Submitted", "Filled"]:
+                        attach_trailing_limit(contract, action, quantity, market_price, trail_limit)
+                        logger.info(f"{symbol}: Limit order placed and trailing limit attached ({trail_limit}%)")
+                else:
+                    logger.warning(f"Unknown OrderType '{order_type}' for {symbol}. Skipping.")
+                
+                # Log transaction
+                append_to_log(symbol, action, quantity, market_price)
+
+            except Exception as e:
+                logger.error(f"Error processing inline trade for {symbol}: {e}")
+
+    logger.info("✅ All inline trades processed.")
+    # ✅ Finally update the orders page view
+    update_orders_page(Trading_Mode)
+
 # Set this flag to True if you want to cancel all open orders before running
 CANCEL_ALL_FIRST = False
 
@@ -162,6 +232,9 @@ APPLY_TRAIL_TO_HOLDINGS = False
 
 # Set this flag to True if you want to attach limit trail orders all open orders before running
 RUN_ORDER_PAGE_UPDATE = False
+
+# <-- Set to True when you want to run from trade file
+RUN_INLINE_TRADE_FILE = True  
 
 # Run logic
 def run():
@@ -180,7 +253,12 @@ def run():
             update_orders_page(Trading_Mode)
             logger.info("Updated Orders with holdings with Buy_Usual and SELL sheet.")
             return
-
+        
+        if RUN_INLINE_TRADE_FILE:
+            process_inline_trades("Trade_File.txt")
+            logger.info("✅ Processed inline trades from trade file.")
+            return
+        
         sheets = pd.read_excel(excel_file, sheet_name=None)
         for sheet_name, sheet_data in sheets.items():
             if sheet_name.startswith("BUY") or sheet_name.startswith("SELL"):

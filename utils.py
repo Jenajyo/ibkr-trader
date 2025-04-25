@@ -6,6 +6,7 @@ from ib_insync import *
 import yfinance as yf
 from datetime import datetime
 
+
 # Suppress ib_insync internal logs
 logging.getLogger('ib_insync').setLevel(logging.WARNING)
 
@@ -29,6 +30,7 @@ def init_ibkr_connection(Trading_Mode):
         excel_file = "c:/Users/jyoti/Downloads/IBKR_TRADER/Orders.xlsx"
     else:
         logger.error("Improper Trading Mode")
+
 
 # Getter for excel_file path
 def get_excel_file():
@@ -125,7 +127,7 @@ def attach_trailing_limit(contract, action, quantity, market_price, trail_limit_
     ib.sleep(1)
     return trailing_trade
 
-# Cancel all open limit or trailing limit orders for a given ticker
+# Cancel existing LMT or TRAIL LIMIT orders for a ticker
 def cancel_existing_orders(ticker):
     ib.reqOpenOrders()
     ib.sleep(0.5)
@@ -135,7 +137,7 @@ def cancel_existing_orders(ticker):
                 ib.cancelOrder(trade.order)
                 ib.sleep(0.5)
 
-# Check current holdings for a ticker and return the position size
+# Check current holdings for a ticker
 def get_remaining_quantity(ticker):
     ib.sleep(1)
     for pos in ib.portfolio():
@@ -143,7 +145,7 @@ def get_remaining_quantity(ticker):
             return pos.position
     return 0
 
-# Add a trailing limit stop loss to specified stocks or all held positions
+# Add trailing limit stop loss to all or specified stocks
 def add_trailing_limit_to_holdings(trail_limit_percent=2.5, side="SELL", tickers=[]):
     for pos in ib.portfolio():
         if pos.contract.secType == "STK" and pos.position > 0:
@@ -175,7 +177,7 @@ def add_trailing_limit_to_holdings(trail_limit_percent=2.5, side="SELL", tickers
             ib.sleep(1)
             logger.info(f"[TRAIL-ATTACH] {symbol}: Trailing limit placed at {trail_limit_percent}% for {int(pos.position)} shares.")
 
-# Update the given sheet in the Excel file with the latest DataFrame content
+# Update sheet in Excel
 def update_sheet_in_excel(sheet_name, df):
     with pd.ExcelWriter(excel_file, engine='openpyxl', mode='a', if_sheet_exists='overlay') as writer:
         df.to_excel(writer, sheet_name=sheet_name, index=False)
@@ -207,10 +209,8 @@ def update_orders_page(Trading_Mode):
         df = sheets.get(sheet_name, pd.DataFrame())
         if df.empty:
             df = pd.DataFrame(columns=["Ticker", "Amount", "Quantity", "TrailLimit%", "OrderType", "Status", "Execution"])
-
         tickers_in_sheet = set(df["Ticker"].astype(str).str.upper())
         updated_tickers = set()
-
         for symbol, qty in holdings.items():
             if action == "BUY" and qty <= 0:
                 continue
@@ -230,17 +230,14 @@ def update_orders_page(Trading_Mode):
                 for col, val in update_data.items():
                     df.loc[df["Ticker"].str.upper() == symbol, col] = val
             else:
-                new_row = {"Ticker": symbol, **update_data}
-                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-
+                df = pd.concat([df, pd.DataFrame([{"Ticker": symbol, **update_data}])], ignore_index=True)
         if Trading_Mode == "Paper":
-            df = df[~df["Ticker"].str.upper().isin(tickers_in_sheet - updated_tickers)]
+            df = df[df["Ticker"].str.upper().isin(updated_tickers)]
         else:
             for symbol in tickers_in_sheet:
                 if symbol not in updated_tickers:
                     for col, val in zip(["Amount", "Quantity", "TrailLimit%", "OrderType", "Status", "Execution"], [2000, " ", 2.5, "MKT-ATCH-LIMIT", "", ""]):
                         df.loc[df["Ticker"].str.upper() == symbol, col] = val
-
         update_sheet_in_excel(sheet_name, df)
 
     sync_sheet("BUY_Usual", "BUY")
