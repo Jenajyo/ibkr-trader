@@ -17,17 +17,16 @@ logger = logging.getLogger(__name__)
 # Initialize IB connection with dynamic mode
 ib = IB()
 excel_file = None
-Trading_Mode = "Paper"
 
 # Function to set real or paper trading connection
 def init_ibkr_connection(Trading_Mode):
     global ib, excel_file
     if Trading_Mode == "Paper":
         ib.connect("127.0.0.1", 7497, clientId=1)
-        excel_file = "c:/Users/jyoti/Downloads/IBKR_TRADER/PaperTrading/Orders_PaperTrading.xlsx"
+        excel_file = "c:/Users/jyoti/Downloads/Stocks/IBKR_TRADER/PaperTrading/Orders_PaperTrading.xlsx"
     elif Trading_Mode == "Live":
-        ib.connect("127.0.0.1", 7496, clientId=1)
-        excel_file = "c:/Users/jyoti/Downloads/IBKR_TRADER/Orders.xlsx"
+        ib.connect("127.0.0.1", 7497, clientId=1)
+        excel_file = "c:/Users/jyoti/Downloads/Stocks/IBKR_TRADER/Orders.xlsx"
     else:
         logger.error("Improper Trading Mode")
 
@@ -205,39 +204,87 @@ def update_orders_page(Trading_Mode):
     holdings = {pos.contract.symbol: pos.position for pos in ib.portfolio() if pos.contract.secType == "STK"}
     sheets = pd.read_excel(excel_file, sheet_name=None)
 
+    # Helper: Find existing TrailLimit% if any
+    def get_existing_trail_percent(symbol):
+        ib.reqOpenOrders()
+        ib.sleep(1)
+        for trade in ib.trades():
+            if (trade.contract.symbol == symbol 
+                and trade.order.orderType == "TRAIL LIMIT" 
+                and trade.orderStatus.status not in ["Cancelled", "Filled"]):
+                return trade.order.trailingPercent
+        return None
+
+    # Helper: Place a new trail limit order
+    def place_trailing_limit(symbol, quantity, action, trail_percent):
+        contract = qualify_contract(symbol)
+        trail_stop_price = round(
+            get_market_price(symbol) * (1 - trail_percent / 100)
+            if action == "SELL"
+            else get_market_price(symbol) * (1 + trail_percent / 100),
+            2
+        )
+        order = Order(
+            action=action,
+            orderType="TRAIL LIMIT",
+            totalQuantity=int(quantity),
+            trailingPercent=trail_percent,
+            trailStopPrice=trail_stop_price,
+            lmtPriceOffset=0.10,
+            tif="GTC",
+            outsideRth=True
+        )
+        ib.placeOrder(contract, order)
+        ib.sleep(1)
+
     def sync_sheet(sheet_name, action):
         df = sheets.get(sheet_name, pd.DataFrame())
         if df.empty:
             df = pd.DataFrame(columns=["Ticker", "Amount", "Quantity", "TrailLimit%", "OrderType", "Status", "Execution"])
         tickers_in_sheet = set(df["Ticker"].astype(str).str.upper())
         updated_tickers = set()
+
         for symbol, qty in holdings.items():
             if action == "BUY" and qty <= 0:
                 continue
             if action == "SELL" and qty > 0:
                 continue
+
             price = get_market_price(symbol)
+            trail_limit_percent = get_existing_trail_percent(symbol)
+
+            if trail_limit_percent is None:
+                # No existing trail limit order, place one with 5%
+                default_trail = 5.0
+                order_action = "SELL" if action == "BUY" else "BUY"
+                place_trailing_limit(symbol, qty, order_action, default_trail)
+                trail_limit_percent = default_trail
+
             update_data = {
                 "Amount": math.ceil(qty * price),
                 "Quantity": qty,
-                "TrailLimit%": 2.5,
+                "TrailLimit%": trail_limit_percent,
                 "Status": "Open",
                 "Execution": " ",
                 "OrderType": "MKT-ATCH-LIMIT"
             }
+
             updated_tickers.add(symbol)
+
             if symbol in tickers_in_sheet:
                 for col, val in update_data.items():
                     df.loc[df["Ticker"].str.upper() == symbol, col] = val
             else:
                 df = pd.concat([df, pd.DataFrame([{"Ticker": symbol, **update_data}])], ignore_index=True)
+
         if Trading_Mode == "Paper":
             df = df[df["Ticker"].str.upper().isin(updated_tickers)]
         else:
             for symbol in tickers_in_sheet:
                 if symbol not in updated_tickers:
-                    for col, val in zip(["Amount", "Quantity", "TrailLimit%", "OrderType", "Status", "Execution"], [2000, " ", 2.5, "MKT-ATCH-LIMIT", "", ""]):
+                    for col, val in zip(["Amount", "Quantity", "TrailLimit%", "OrderType", "Status", "Execution"], [2000, " ", 5.0, "MKT-ATCH-LIMIT", "", ""]):
                         df.loc[df["Ticker"].str.upper() == symbol, col] = val
+
         update_sheet_in_excel(sheet_name, df)
 
     sync_sheet("BUY_Usual", "BUY")

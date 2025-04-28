@@ -12,7 +12,7 @@ from utils import (
 )
 
 # Configuration Flags
-Trading_Mode = "Paper"
+Trading_Mode = "Live"
 CANCEL_ALL_FIRST = False
 APPLY_TRAIL_TO_HOLDINGS = False
 RUN_ORDER_PAGE_UPDATE = False
@@ -162,7 +162,7 @@ def process_inline_trades(trade_file_path="Trade_File.txt"):
 
     with open(trade_file_path, "r") as file:
         content = file.read()
-
+    
     try:
         trade_config = ast.literal_eval(content)
     except Exception as e:
@@ -231,10 +231,10 @@ CANCEL_ALL_FIRST = False
 APPLY_TRAIL_TO_HOLDINGS = False
 
 # Set this flag to True if you want to attach limit trail orders all open orders before running
-RUN_ORDER_PAGE_UPDATE = False
+RUN_ORDER_PAGE_UPDATE = True
 
 # <-- Set to True when you want to run from trade file
-RUN_INLINE_TRADE_FILE = True  
+RUN_INLINE_TRADE_FILE = False  
 
 # Run logic
 def run():

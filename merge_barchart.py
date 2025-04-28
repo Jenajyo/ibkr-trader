@@ -4,7 +4,7 @@ from openpyxl import load_workbook
 
 # Define file paths
 base_path = r"C:\Users\jyoti\Downloads"
-output_path = r"C:\Users\jyoti\Downloads\IBKR_Trader\PaperTrading"
+output_path = r"C:\Users\jyoti\Downloads\Stocks\IBKR_Trader\PaperTrading"
 output_file = os.path.join(output_path, "merged_intraday.csv")
 orders_file = os.path.join(output_path, "Orders_PaperTrading.xlsx")
 

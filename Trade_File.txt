@@ -1,8 +1,8 @@
 {
   "BUY": [
-    ["NAN", "2000", 2.5, "LMT-ATTCH-TRAIL-LIMIT"]
+    ["AMZN", "1000", 10, "LMT-ATTCH-TRAIL-LIMIT"]
   ],
   "SELL": [
-    ["NAN", "2000", 2.5, "LMT-ATTCH-TRAIL-LIMIT"]
+    []
   ]
 }
