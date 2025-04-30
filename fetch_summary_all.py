@@ -2,6 +2,7 @@ import subprocess
 import time
 import requests
 import os
+import re
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -10,14 +11,16 @@ from selenium.webdriver.common.by import By
 chrome_path = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 user_data_dir = r"C:\Users\jyoti\AppData\Local\Google\Chrome\User Data"
 remote_debugging_port = "9222"
-lookback_hours = 12  # Change this to 4, 5, or 12
+lookback_hours = 3  # Change to 4, 5, or 12
+
 now = datetime.now()
-output_dir = now.strftime("summaries_%Y-%m-%d")
+timestamp_str = now.strftime("%Y-%m-%d_%H-%M-%S")
+output_dir = f"summaries_{timestamp_str}_{lookback_hours}h"
 os.makedirs(output_dir, exist_ok=True)
 
 # === FUNCTIONS ===
 def kill_chrome():
-    print("🔴 Killing any existing Chrome processes...")
+    print("\U0001F534 Killing any existing Chrome processes...")
     os.system("taskkill /f /im chrome.exe >nul 2>&1")
     os.system("taskkill /f /im chromedriver.exe >nul 2>&1")
 
@@ -27,6 +30,9 @@ def is_debugger_running():
         return res.status_code == 200
     except:
         return False
+
+def sanitize_filename(title):
+    return re.sub(r'[\\/*?:"<>|]', "", title)
 
 # === LAUNCH CHROME ===
 kill_chrome()
@@ -40,14 +46,14 @@ if not is_debugger_running():
         "--no-default-browser-check",
         "--remote-allow-origins=*"
     ])
-    print("⏳ Chrome launched. Waiting for debugger port to open...")
+    print("\u23f3 Chrome launched. Waiting for debugger port to open...")
     for _ in range(30):
         if is_debugger_running():
-            print("✅ Chrome debugger detected!")
+            print("\u2705 Chrome debugger detected!")
             break
         time.sleep(1)
     else:
-        raise Exception("❌ Chrome debugger port did not open. Exiting...")
+        raise Exception("\u274c Chrome debugger port did not open. Exiting...")
 
 # === CONNECT DRIVER ===
 options = webdriver.ChromeOptions()
@@ -56,11 +62,11 @@ options.add_argument("--remote-allow-origins=*")
 driver = webdriver.Chrome(options=options)
 
 # === FETCH VIDEO LINKS ===
-print("📅 Opening YouTube subscriptions feed...")
+print("\U0001f4c5 Opening YouTube subscriptions feed...")
 driver.get("https://www.youtube.com/feed/subscriptions")
 time.sleep(5)
 
-print("🔁 Scrolling to collect video links...")
+print("\U0001f501 Scrolling to collect video links...")
 video_links = set()
 keywords = ['seconds ago', 'minutes ago', 'hour ago', 'hours ago']
 for _ in range(12):
@@ -87,31 +93,34 @@ for _ in range(12):
         except:
             continue
 
-print(f"✅ Found {len(video_links)} videos in last {lookback_hours} hours.")
+print(f"\u2705 Found {len(video_links)} videos in last {lookback_hours} hours.")
 
 # === PROCESS VIDEOS ===
 combined_summary = ""
 for idx, link in enumerate(video_links):
-    print(f"\n🎯 Opening video {idx + 1}/{len(video_links)}: {link}")
+    print(f"\n\U0001f3af Opening video {idx + 1}/{len(video_links)}: {link}")
     driver.get(link)
     time.sleep(6)
-    driver.execute_script("window.scrollBy(0, 800);")
-    time.sleep(2)
 
-    input("⏳ Click 'Transcript & Summary', then press ENTER...\n")
+    input("\u23F3 Click 'Transcript & Summary', then press ENTER...\n")
 
     try:
         print("🔍 Extracting summary via visible widget...")
+        title_element = driver.find_element(By.CSS_SELECTOR, 'h1.title yt-formatted-string')
+        title = title_element.text.strip()
+        filename_title = sanitize_filename(title)
+
         containers = driver.find_elements(By.CSS_SELECTOR, '[class*="glasp"]')
         found = False
         for container in containers:
             text = container.text.strip()
             if text and len(text) > 20:
-                filename = os.path.join(output_dir, f"glasp_summary_{idx + 1}.txt")
-                with open(filename, "w", encoding="utf-8") as f:
-                    f.write(text)
-                combined_summary += f"\n{'='*80}\n{link}\n{text}\n"
-                print(f"✅ Saved summary to {filename}")
+                filepath = os.path.join(output_dir, f"{filename_title}.txt")
+                summary_with_title = f"Title: {title}\nLink: {link}\n\n{text}"
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(summary_with_title)
+                combined_summary += f"\n{'='*80}\n{summary_with_title}\n"
+                print(f"✅ Saved summary to {filepath}")
                 found = True
                 break
         if not found:
@@ -126,5 +135,5 @@ if combined_summary.strip():
         f.write(combined_summary.strip())
     print(f"\n📍 Combined summary saved to: {final_file}")
 
-driver.quit()
 print("\n✅ All done!")
+driver.quit()
