@@ -201,8 +201,26 @@ def append_to_log(symbol, action, quantity, price):
 
 # Update BUY_USUAL and SELL sheets based on holdings
 def update_orders_page(Trading_Mode):
-    holdings = {pos.contract.symbol: pos.position for pos in ib.portfolio() if pos.contract.secType == "STK"}
     sheets = pd.read_excel(excel_file, sheet_name=None)
+
+    # Enforce correct dtypes
+    dtype_mapping = {
+        "Ticker": 'str',
+        "Amount": 'float',
+        "Quantity": 'float',
+        "TrailLimit%": 'float',
+        "OrderType": 'str',
+        "Status": 'str',
+        "Execution": 'str'
+    }
+    for sheet_name, df in sheets.items():
+        if not df.empty:
+            for col, dtype in dtype_mapping.items():
+                if col in df.columns:
+                    df[col] = df[col].astype(dtype, errors='ignore')
+            sheets[sheet_name] = df
+
+    holdings = {pos.contract.symbol: pos.position for pos in ib.portfolio() if pos.contract.secType == "STK"}
 
     # Helper: Find existing TrailLimit% if any
     def get_existing_trail_percent(symbol):
@@ -240,7 +258,15 @@ def update_orders_page(Trading_Mode):
     def sync_sheet(sheet_name, action):
         df = sheets.get(sheet_name, pd.DataFrame())
         if df.empty:
-            df = pd.DataFrame(columns=["Ticker", "Amount", "Quantity", "TrailLimit%", "OrderType", "Status", "Execution"])
+            df = pd.DataFrame({
+                "Ticker": pd.Series(dtype='str'),
+                "Amount": pd.Series(dtype='float'),
+                "Quantity": pd.Series(dtype='float'),
+                "TrailLimit%": pd.Series(dtype='float'),
+                "OrderType": pd.Series(dtype='str'),
+                "Status": pd.Series(dtype='str'),
+                "Execution": pd.Series(dtype='str')
+            })
         tickers_in_sheet = set(df["Ticker"].astype(str).str.upper())
         updated_tickers = set()
 
