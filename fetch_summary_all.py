@@ -107,13 +107,20 @@ for idx, link in enumerate(video_links):
     try:
         print("🔍 Extracting summary via visible widget...")
 
-        # Fallback title from browser tab
+        # Extract title
         try:
             title = driver.execute_script("return document.title")
             if title.endswith(" - YouTube"):
                 title = title.rsplit(" - YouTube", 1)[0].strip()
         except:
             title = "Untitled"
+
+        # Extract channel name
+        try:
+            channel_element = driver.find_element(By.CSS_SELECTOR, '#text-container.ytd-channel-name')
+            channel_name = channel_element.text.strip()
+        except:
+            channel_name = "Unknown Channel"
 
         filename_title = sanitize_filename(title)
 
@@ -123,7 +130,7 @@ for idx, link in enumerate(video_links):
             text = container.text.strip()
             if text and len(text) > 20:
                 filepath = os.path.join(output_dir, f"{filename_title}.txt")
-                summary_with_title = f"Title: {title}\nLink: {link}\n\n{text}"
+                summary_with_title = f"Title: {title}\nChannel: {channel_name}\nLink: {link}\n\n{text}"
                 with open(filepath, "w", encoding="utf-8") as f:
                     f.write(summary_with_title)
                 combined_summary += f"\n{'='*80}\n{summary_with_title}\n"
