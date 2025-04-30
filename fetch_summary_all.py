@@ -11,7 +11,7 @@ from selenium.webdriver.common.by import By
 chrome_path = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 user_data_dir = r"C:\Users\jyoti\AppData\Local\Google\Chrome\User Data"
 remote_debugging_port = "9222"
-lookback_hours = 3  # Change to 4, 5, or 12
+lookback_hours = 2  # Change to 4, 5, or 12
 
 now = datetime.now()
 timestamp_str = now.strftime("%Y-%m-%d_%H-%M-%S")
@@ -106,8 +106,15 @@ for idx, link in enumerate(video_links):
 
     try:
         print("🔍 Extracting summary via visible widget...")
-        title_element = driver.find_element(By.CSS_SELECTOR, 'h1.title yt-formatted-string')
-        title = title_element.text.strip()
+
+        # Fallback title from browser tab
+        try:
+            title = driver.execute_script("return document.title")
+            if title.endswith(" - YouTube"):
+                title = title.rsplit(" - YouTube", 1)[0].strip()
+        except:
+            title = "Untitled"
+
         filename_title = sanitize_filename(title)
 
         containers = driver.find_elements(By.CSS_SELECTOR, '[class*="glasp"]')
